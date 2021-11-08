@@ -21,7 +21,11 @@ min 5 hidden layer with 5 neurons each.
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.hidden_layer1 = nn.Linear(1,5)
+        self.nn.sequential({
+            
+            
+            })
+        self.n = nn.Linear(1,5)
         self.hidden_layer2 = nn.Linear(5,5)
         self.hidden_layer3 = nn.Linear(5,5)
         self.hidden_layer4 = nn.Linear(5,5)
@@ -59,13 +63,13 @@ def f(x,net):
 
 # BC tells us that for any x in range[0,2] and time=0, the value of u is given by 6e^(-3x)
 # Take say 500 random numbers of x
-x_bc = np.zeros(1)
+x_bc = np.array([[0],[1],[2]])
 #t_bc = np.zeros((500,1))
 # compute u based on BC
-u_bc = np.ones(1)*3
+u_bc = np.array([[0],[3],[0]])
 
 ### (3) Training / Fitting
-iterations = 6000
+iterations = 4000
 previous_validation_loss = 99999999.0
 for epoch in range(iterations):
     optimizer.zero_grad() # to make the gradients zero
