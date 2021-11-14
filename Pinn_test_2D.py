@@ -4,73 +4,92 @@ from torch.autograd import Variable
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 import numpy as np
 
-# We consider Net as our solution u_theta(x,t)
 
-"""
-When forming the network, we have to keep in mind the number of inputs and outputs
-In ur case: #inputs = 2 (x,t)
-and #outputs = 1
+# class Net(nn.Module):
+#     def __init__(self):
+#         super(Net, self).__init__()
+#         self.hidden_layer1 = nn.Linear(1,5)
+#         self.hidden_layer2 = nn.Linear(5,5)
+#         self.hidden_layer3 = nn.Linear(5,5)
+#         self.hidden_layer4 = nn.Linear(5,5)
+#         self.hidden_layer5 = nn.Linear(5,5)
+#         self.output_layer = nn.Linear(5,1)
 
-You can add ass many hidden layers as you want with as many neurons.
-More complex the network, the more prepared it is to find complex solutions, but it also requires more data.
+#     def forward(self,x):
+#         inputs = x # combined two arrays of 1 columns each to one array of 2 columns
+#         layer1_out = torch.sigmoid(self.hidden_layer1(inputs))
+#         layer2_out = torch.sigmoid(self.hidden_layer2(layer1_out))
+#         layer3_out = torch.sigmoid(self.hidden_layer3(layer2_out))
+#         layer4_out = torch.sigmoid(self.hidden_layer4(layer3_out))
+#         layer5_out = torch.sigmoid(self.hidden_layer5(layer4_out))
+#         output = self.output_layer(layer5_out) ## For regression, no activation is used in output layer
+#         return output
 
-Let us create this network:
-min 5 hidden layer with 5 neurons each.
-"""
-
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        self.hidden_layer1 = nn.Linear(1,5)
-        self.hidden_layer2 = nn.Linear(5,5)
-        self.hidden_layer3 = nn.Linear(5,5)
-        self.hidden_layer4 = nn.Linear(5,5)
-        self.hidden_layer5 = nn.Linear(5,5)
-        self.output_layer = nn.Linear(5,1)
-
-    def forward(self,x):
-        inputs = x # combined two arrays of 1 columns each to one array of 2 columns
-        layer1_out = torch.sigmoid(self.hidden_layer1(inputs))
-        layer2_out = torch.sigmoid(self.hidden_layer2(layer1_out))
-        layer3_out = torch.sigmoid(self.hidden_layer3(layer2_out))
-        layer4_out = torch.sigmoid(self.hidden_layer4(layer3_out))
-        layer5_out = torch.sigmoid(self.hidden_layer5(layer4_out))
-        output = self.output_layer(layer5_out) ## For regression, no activation is used in output layer
-        return output
+#     def predict(self, X):
+#             X = torch.Tensor(X)
+#             return self(X).detach().numpy().squeeze()
     
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.xavier_uniform_(m.weight)
+        m.bias.data.fill_(0.01)
 
-LEARNING_RATE = 1e-3   
+LEARNING_RATE = 1e-4
+WEIGHT_DECAY = 1e-7
 ### (2) Model
-net = Net()
+net = nn.Sequential(
+          nn.Linear(1,20),
+          nn.Sigmoid(),
+          nn.Linear(20,20),
+          nn.LeakyReLU(),
+          nn.Linear(20,200),
+          nn.LeakyReLU(),
+          nn.Linear(200,80),
+          nn.LeakyReLU(),
+          nn.Linear(80,20),
+          nn.LeakyReLU(),
+          nn.Linear(20,20),
+          nn.Sigmoid(),
+          nn.Linear(20,1),
+        )
 net = net.to(device)
+net.apply(init_weights)
+#mse_cost_function = torch.nn.MSELoss() # Mean squared error
 mse_cost_function = torch.nn.MSELoss() # Mean squared error
-optimizer = torch.optim.Adam(net.parameters(),lr = LEARNING_RATE)
+optimizer = torch.optim.Adam(net.parameters(),lr = LEARNING_RATE,weight_decay= WEIGHT_DECAY)
 
 ## PDE as loss function. Thus would use the network which we call as u_theta
 def f(x,net):
     u = net(x) # the dependent variable u is given by the network based on independent variables x,t
     ## Based on our f = du/dx - 2du/dt - u, we need du/dx and du/dt
+    #u_y = torch.autograd.grad(u.sum(), y, create_graph=True)[0]
     u_x = torch.autograd.grad(u.sum(), x, create_graph=True)[0]
     u_xx = torch.autograd.grad(u_x.sum(), x, create_graph=True)[0]
-    pde = u_xx+3*u_x-u
+    pde = u_xx-u_x+u
     return pde
 
-## Data from Boundary Conditions
-# u(x,0)=6e^(-3x)
-## BC just gives us datapoints for training
+def lossCalc(mse_u,mse_f,bp,cp,epoch = -1,beta = 0,betaLim = 1):
+    if epoch*beta > betaLim or epoch == -1:
+        loss = mse_u/boundary_points + (mse_f/col_points)
+    else:
+        loss = mse_u/boundary_points + (mse_f/col_points)*epoch*beta
+    
+    return loss,epoch*beta
+    
 
-# BC tells us that for any x in range[0,2] and time=0, the value of u is given by 6e^(-3x)
-# Take say 500 random numbers of x
-x_bc = np.array([[0],[1]])
+## Create Data for boundary conditions
+
+x_bc = np.array([[0],[1],[2]])
 #t_bc = np.zeros((500,1))
 # compute u based on BC
-u_bc = np.array([[0],[3]])
+u_bc = np.array([[0],[3],[0]])
 
 ### (3) Training / Fitting
-iterations = 5000
+iterations = 20000
 col_points = 100
 boundary_points = len(u_bc)
-
+#2.4087e-05
+beta = 1e-4
 for epoch in range(iterations):
     optimizer.zero_grad() # to make the gradients zero
     
@@ -83,7 +102,7 @@ for epoch in range(iterations):
     mse_u = mse_cost_function(net_bc_out, pt_u_bc)
     
     # Loss based on PDE
-    x_collocation = np.random.uniform(low=0.0, high=5, size=(col_points,1))
+    x_collocation = np.random.uniform(low=0.0, high=2, size=(col_points,1))
     #t_collocation = np.random.uniform(low=0.0, high=1.0, size=(500,1))
     all_zeros = np.zeros((col_points,1))
     
@@ -96,20 +115,19 @@ for epoch in range(iterations):
     mse_f = mse_cost_function(f_out, pt_all_zeros)
     
     # Combining the loss functions
-    loss = mse_u/boundary_points + mse_f/col_points
-    
+    #loss = mse_u/boundary_points + (mse_f/col_points)
+    loss,epochBeta = lossCalc(mse_u,mse_f,boundary_points,col_points,epoch,beta)
     
     loss.backward() # This is for computing gradients using backward propagation
     optimizer.step() # This is equivalent to : theta_new = theta_old - alpha * derivative of J w.r.t theta
 
     with torch.autograd.no_grad():
-    	print(epoch,"Traning Loss:",loss.data)
+        if epoch%100 == 0:
+            print('Epoch:',epoch,"Traning Loss:",loss.data,'epochBeta:',epochBeta)
         
 
-from mpl_toolkits.mplot3d import Axes3D
+
 import matplotlib.pyplot as plt
-from matplotlib import cm
-from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import numpy as np
 
 n = 1000
