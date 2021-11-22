@@ -28,18 +28,16 @@ import numpy as np
 #            X = torch.Tensor(X)
 #            return self(X).detach().numpy().squeeze()
 
-NN=10
+NN=50
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         self.regressor = nn.Sequential(nn.Linear(1, NN),
-                                       nn.Sigmoid(),
+                                       nn.Tanh(),
                                        nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
+                                       nn.Tanh(),
                                        nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
-                                       nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
+                                       nn.Tanh(),
                                        nn.Linear(NN, 1))
     def forward(self, x):
         output = self.regressor(x)
@@ -47,30 +45,36 @@ class Net(nn.Module):
 
 def init_weights(m):
     if isinstance(m, nn.Linear):
-        torch.nn.init.xavier_uniform_(m.weight)
+        torch.nn.init.xavier_normal_(m.weight)
         m.bias.data.fill_(0.01)
 
 
 ## Hyperparameters
-LEARNING_RATE = 1e-2
+LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 0
 BETA = 1e6
 MU = -1;
 BETA_LIM = BETA
-TRAIN_LIM = 2*np.pi
-COL_RES = 500
-EPOCHS = 200
+TRAIN_LIM = 3*np.pi
+COL_RES = 1000
+EPOCHS = 1000
+M = 1
+K = 1
+omega=np.sqrt(K/M)
 
 #Boundary Conditions
-t_bc = np.array([[0]])
-x_bc = np.array([[1]])
+t_bc = np.array([[0],[0.5*np.pi],[1*np.pi],[1.5*np.pi],[2*np.pi],[2.5*np.pi],[3*np.pi]])
+x_bc = np.array([[1],[0],[-1],[0],[1],[0],[-1]])
 
 # Points and boundary vs ODE weight
 col_points = int(TRAIN_LIM*COL_RES)
 boundary_points = len(x_bc)
 
 F_WEIGHT = 1 #Physics Weight
-B_WEIGHT = 1/(10*boundary_points+col_points) #Boundary Weight
+B_WEIGHT = 1/(1*boundary_points+col_points) #Boundary Weight
+m = 1
+k = 1
+
 
 # Create net, assign to device and use initialisation
 net = Net()
@@ -81,13 +85,18 @@ net.apply(init_weights)
 criterion = torch.nn.MSELoss() # Mean squared error
 optimizer = torch.optim.Adam(net.parameters(),lr = LEARNING_RATE)
 
+
+def net_u(x):        
+    u = net(x)    
+    u_x = torch.autograd.grad(u.sum(), x, create_graph=True)[0] # automatic differentiation 
+    return u, u_x
+
 ## PDE as loss function
-def f(t,mu,net):
-    x = net(t)
-    x_t = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
-    x_tt = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
+def f(x,mu,net):
+    u, u_x = net_u(x)
+    u_xx = torch.autograd.grad(u_x.sum(), x, create_graph=True)[0] 
     # Test Equation
-    ode = mu*x-x_t
+    ode = u_xx+u
     return ode
 
 def lossCalc(mse_u,mse_f,bp,cp,f_weight,b_weight,epoch = -1,beta = 1,betaLim = 1):
@@ -134,6 +143,7 @@ for epoch in range(EPOCHS):
         
 
 
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -152,9 +162,13 @@ T_plot = T_plot.cpu().detach().numpy()
 ode1_residual = f(T_test,MU,net)
 ode1_residual = ode1_residual.cpu().detach().numpy()
 
+y = np.cos(np.sqrt(k/m)*T_plot)
+
+
 plt.figure()
 plt.scatter(T_plot,x1_plot,label = 'X1')
-plt.scatter(T_plot,np.exp(-T_plot),label = 'Exact Solution')
+plt.scatter(T_plot,y,label = 'Exact')
+
 plt.legend()
 
 plt.figure()
