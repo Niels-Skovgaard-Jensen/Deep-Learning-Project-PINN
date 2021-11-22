@@ -28,15 +28,19 @@ import numpy as np
 #            X = torch.Tensor(X)
 #            return self(X).detach().numpy().squeeze()
 
-
+NN=10
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.regressor = nn.Sequential(nn.Linear(1, 1024),
-                                       nn.ReLU(inplace=True),
-                                       nn.Linear(1024, 1024),
-                                       nn.ReLU(inplace=True),
-                                       nn.Linear(1024, 1))
+        self.regressor = nn.Sequential(nn.Linear(1, NN),
+                                       nn.Sigmoid(),
+                                       nn.Linear(NN, NN),
+                                       nn.Sigmoid(),
+                                       nn.Linear(NN, NN),
+                                       nn.Sigmoid(),
+                                       nn.Linear(NN, NN),
+                                       nn.Sigmoid(),
+                                       nn.Linear(NN, 1))
     def forward(self, x):
         output = self.regressor(x)
         return output
@@ -55,7 +59,7 @@ MU = -1;
 BETA_LIM = BETA
 TRAIN_LIM = 2*np.pi
 COL_RES = 500
-EPOCHS = 1000
+EPOCHS = 200
 
 #Boundary Conditions
 t_bc = np.array([[0]])
@@ -81,8 +85,9 @@ optimizer = torch.optim.Adam(net.parameters(),lr = LEARNING_RATE)
 def f(t,mu,net):
     x = net(t)
     x_t = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
+    x_tt = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
     # Test Equation
-    ode = mu*x-x_t 
+    ode = mu*x-x_t-1*x_tt
     return ode
 
 def lossCalc(mse_u,mse_f,bp,cp,f_weight,b_weight,epoch = -1,beta = 1,betaLim = 1):
@@ -123,7 +128,7 @@ for epoch in range(EPOCHS):
     optimizer.step() 
     #Display loss during training
     with torch.autograd.no_grad():
-        if epoch%100 == 0:
+        if epoch%10 == 0:
             print('Epoch:',epoch,"Traning Loss:",loss.data,'epochBeta:',epochBeta)
             print('Boundary Loss:',mse_u/boundary_points,'ODE Loss: ',mse_f/col_points)
         

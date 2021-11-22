@@ -1,5 +1,3 @@
-
-
 import torch
 import torch.nn as nn
 from torch.nn.functional import relu
@@ -9,27 +7,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-NN=150
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        
-        self.regressor = nn.Sequential(nn.Linear(1, NN),
-                                       nn.Sigmoid(),
-                                       nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
-                                       nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
-                                       nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
-                                       nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
-                                       nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
-                                       nn.Sigmoid(),
-                                       nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
-                                       nn.Linear(NN, 2))
+        self.regressor = nn.Sequential(nn.Linear(1, 1024),
+                                       nn.LeakyReLU(inplace=True),
+                                       nn.Linear(1024, 1024),
+                                       nn.LeakyReLU(inplace=True),
+                                       nn.Linear(1024, 1024),
+                                       nn.LeakyReLU(inplace=True),
+                                       nn.Linear(1024, 1024),
+                                       nn.LeakyReLU(inplace=True),
+                                       nn.Linear(1024, 1024),
+                                       nn.LeakyReLU(inplace=True),
+                                       nn.Linear(1024, 2))
     def forward(self, x):
         output = self.regressor(x)
         return output
@@ -39,11 +30,11 @@ def init_weights(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform_(m.weight)
 
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-5
 MU = 1; # For Van der Pol equation
-TRAIN_LIM = 1*MU
-COL_RES = 100
-EPOCHS = 2000
+TRAIN_LIM = 10*MU
+COL_RES = 500
+EPOCHS = 5000
 
 #Boundary Conditions
 t_bc = np.array([[0]])
@@ -54,7 +45,7 @@ col_points = int(TRAIN_LIM*COL_RES)
 boundary_points = len(x_bc)
 
 F_WEIGHT = 1 #Physics Weight
-B_WEIGHT = 1/(1.5*(boundary_points+col_points)) #Boundary Weight
+B_WEIGHT = 1/(10*(boundary_points+col_points)) #Boundary Weight
 
 
 #Define Net, apply to device and init weights
@@ -116,13 +107,19 @@ for epoch in range(EPOCHS):
     # Combining the loss functions
     loss,epochBeta = lossCalc(mse_u,mse_f,boundary_points,col_points,F_WEIGHT,B_WEIGHT)
     
-    loss.backward() 
-    optimizer.step() 
+    def closure():
+        optimizer.zero_grad()
+        output = net(pt_t_bc)
+        loss,epochBeta = lossCalc(mse_u,mse_f,boundary_points,col_points,F_WEIGHT,B_WEIGHT)
+        loss.backward()
+        return loss
+    
+    optimizer.step(closure)
 
     with torch.autograd.no_grad():
         if epoch%10 == 0:
             print('Epoch:',epoch,"Traning Loss:",loss.data,'epochBeta:',epochBeta)
-            print('Boundary Loss:',(B_WEIGHT*mse_u)/boundary_points,'ODE Loss: ',(F_WEIGHT*mse_f/col_points))
+            print('Boundary Loss:',mse_u/boundary_points,'ODE Loss: ',mse_f/col_points)
         
 
 ## Plot of solution within trained bounds
