@@ -28,18 +28,18 @@ import numpy as np
 #            X = torch.Tensor(X)
 #            return self(X).detach().numpy().squeeze()
 
-NN=10
+NN=5
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         self.regressor = nn.Sequential(nn.Linear(1, NN),
-                                       nn.Sigmoid(),
+                                       nn.Tanh(),
                                        nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
+                                       nn.Tanh(),
                                        nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
+                                       nn.Tanh(),
                                        nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
+                                       nn.Tanh(),
                                        nn.Linear(NN, 1))
     def forward(self, x):
         output = self.regressor(x)
@@ -52,25 +52,31 @@ def init_weights(m):
 
 
 ## Hyperparameters
-LEARNING_RATE = 1e-2
+LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 0
-BETA = 1e6
+BETA = 1
 MU = -1;
 BETA_LIM = BETA
 TRAIN_LIM = 2*np.pi
-COL_RES = 500
-EPOCHS = 200
+COL_RES = 200
+EPOCHS = 300
+
+c1 = 1
+c2 = np.pi
+beta = np.arctan(c1/c2)
+alpha = c1/np.sin(beta)
 
 #Boundary Conditions
 t_bc = np.array([[0]])
 x_bc = np.array([[1]])
+x_t_bc = np.array([[alpha*np.cos(beta)]])
 
 # Points and boundary vs ODE weight
 col_points = int(TRAIN_LIM*COL_RES)
-boundary_points = len(x_bc)
+boundary_points = len(x_bc)+len(x_t_bc)
 
 F_WEIGHT = 1 #Physics Weight
-B_WEIGHT = 1/(10*boundary_points+col_points) #Boundary Weight
+B_WEIGHT = 1/(1*boundary_points+col_points) #Boundary Weight
 
 # Create net, assign to device and use initialisation
 net = Net()
@@ -85,9 +91,9 @@ optimizer = torch.optim.Adam(net.parameters(),lr = LEARNING_RATE)
 def f(t,mu,net):
     x = net(t)
     x_t = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
-    x_tt = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
+    x_tt = torch.autograd.grad(x_t.sum(), t, create_graph=True)[0]
     # Test Equation
-    ode = mu*x-x_t
+    ode = x_tt+x_t
     return ode
 
 def lossCalc(mse_u,mse_f,bp,cp,f_weight,b_weight,epoch = -1,beta = 1,betaLim = 1):
@@ -106,12 +112,15 @@ for epoch in range(EPOCHS):
     optimizer.zero_grad() # to make the gradients zero
     
     # Loss based on boundary conditions
-    pt_t_bc = Variable(torch.from_numpy(t_bc).float(), requires_grad=False).to(device)
-    pt_x_bc = Variable(torch.from_numpy(x_bc).float(), requires_grad=False).to(device)
+    pt_t_bc = Variable(torch.from_numpy(t_bc).float(), requires_grad=True).to(device)
+    pt_x_bc = Variable(torch.from_numpy(x_bc).float(), requires_grad=True).to(device)
+    pt_t_x_bc = Variable(torch.from_numpy(x_t_bc).float(), requires_grad=True).to(device)
     
     net_bc_out = net(pt_t_bc) # output of u(x,t)
-    mse_u = criterion(input = net_bc_out, target = pt_x_bc) # Boundary loss
-
+    mse_u1 = criterion(input = net_bc_out, target = pt_x_bc) # Boundary loss
+    net_t_bc_out = torch.autograd.grad(net_bc_out, pt_t_bc, create_graph=True)[0]
+    mse_u2 = criterion(input = net_bc_out, target = pt_t_x_bc) 
+    mse_u = mse_u1+mse_u2
     # Loss based on PDE
     t_collocation = np.random.uniform(low=0.0, high=TRAIN_LIM, size=(col_points,1))
     all_zeros = np.zeros((col_points,1))    
@@ -121,16 +130,17 @@ for epoch in range(EPOCHS):
     mse_f = criterion(input = ode, target = pt_all_zeros) #ODE Loss
     
     # Combining the loss functions
-    loss,epochBeta = lossCalc(mse_u,mse_f,boundary_points,col_points,F_WEIGHT,B_WEIGHT)
+    loss,epochBeta = lossCalc(mse_u = mse_u,mse_f=mse_f,bp = boundary_points,cp=col_points,f_weight=F_WEIGHT,b_weight=B_WEIGHT,epoch=epoch,beta=BETA)
     #Gradients
     loss.backward() 
     #Step Optimizer
     optimizer.step() 
     #Display loss during training
     with torch.autograd.no_grad():
-        if epoch%10 == 0:
+        if epoch%50 == 0:
             print('Epoch:',epoch,"Traning Loss:",loss.data,'epochBeta:',epochBeta)
             print('Boundary Loss:',mse_u/boundary_points,'ODE Loss: ',mse_f/col_points)
+            
         
 
 
@@ -152,10 +162,7 @@ T_plot = T_plot.cpu().detach().numpy()
 ode1_residual = f(T_test,MU,net)
 ode1_residual = ode1_residual.cpu().detach().numpy()
 
-plt.figure()
-plt.scatter(T_plot,x1_plot,label = 'X1')
-plt.scatter(T_plot,np.exp(-T_plot),label = 'Exact Solution')
-plt.legend()
+
 
 plt.figure()
 plt.title('Residual plots of ODE1')

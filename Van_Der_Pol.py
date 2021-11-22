@@ -9,26 +9,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-NN=150
+NN=10
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         
         self.regressor = nn.Sequential(nn.Linear(1, NN),
-                                       nn.Sigmoid(),
+                                       nn.Tanh(),
                                        nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
+                                       nn.Tanh(),
                                        nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
+                                       nn.Tanh(),
                                        nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
-                                       nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
-                                       nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
-                                       nn.Sigmoid(),
-                                       nn.Linear(NN, NN),
-                                       nn.Sigmoid(),
+                                       nn.Tanh(),
                                        nn.Linear(NN, 2))
     def forward(self, x):
         output = self.regressor(x)
@@ -42,8 +35,8 @@ def init_weights(m):
 LEARNING_RATE = 1e-3
 MU = 1; # For Van der Pol equation
 TRAIN_LIM = 1*MU
-COL_RES = 100
-EPOCHS = 2000
+COL_RES = 10000
+EPOCHS = 30
 
 #Boundary Conditions
 t_bc = np.array([[0]])
@@ -54,7 +47,7 @@ col_points = int(TRAIN_LIM*COL_RES)
 boundary_points = len(x_bc)
 
 F_WEIGHT = 1 #Physics Weight
-B_WEIGHT = 1/(1.5*(boundary_points+col_points)) #Boundary Weight
+B_WEIGHT = 1/(1*(boundary_points+col_points)) #Boundary Weight
 
 
 #Define Net, apply to device and init weights
