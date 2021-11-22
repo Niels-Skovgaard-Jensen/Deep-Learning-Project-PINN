@@ -1,0 +1,146 @@
+
+
+import torch
+import torch.nn as nn
+from torch.nn.functional import relu
+from torch.autograd import Variable
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+## Load numerical solution
+import scipy.io
+mat = scipy.io.loadmat('Van_der_pol_mu2.mat')
+VanDerPolmu2 = mat['data2']
+
+
+mat = scipy.io.loadmat('Van_der_pol_mu15.mat')
+VanDerPolmu15 = mat['data']
+NN=100
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        
+        self.regressor = nn.Sequential(nn.Linear(1, NN),
+                                       nn.Tanh(),
+                                       nn.Linear(NN, NN),
+                                       nn.Tanh(),
+                                       nn.Linear(NN, NN),
+                                       nn.Tanh(),
+                                       nn.Linear(NN, NN),
+                                       nn.Tanh(),
+                                       nn.Linear(NN, NN),
+                                       nn.Tanh(),
+                                       nn.Linear(NN, NN),
+                                       nn.Tanh(),
+                                       nn.Linear(NN, 2))
+    def forward(self, x):
+        output = self.regressor(x)
+        return output
+
+
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.xavier_uniform_(m.weight)
+
+LEARNING_RATE = 5e-4
+EPOCHS = 500
+MU = 2
+TRAIN_LIM = 50
+col_points = 1000
+
+#Boundary Conditions
+# t_bc = np.array([[0]])
+# x_bc = np.array([[2,0]])
+
+t_bc = VanDerPolmu2[:,0]
+t_bc = t_bc[..., None] 
+x_bc = VanDerPolmu2[:,1:3]
+
+
+def f(t,mu,net):
+    x = net(t) 
+    x1 = x[:,0]
+    x2 = x[:,1]
+    ## Van der Pol Equation
+    x1_t = torch.autograd.grad(x1.sum(), t, create_graph=True)[0]
+    x2_t = torch.autograd.grad(x2.sum(), t, create_graph=True)[0]
+    ode1 = x1_t-x2
+    ode2 = mu*(1-x1**2)*x2-x1-x2_t
+    return ode1,ode2
+
+#Define Net, apply to device and init weights
+net = Net()
+net = net.to(device)
+net.apply(init_weights)
+
+#Define Criteria
+criterion = torch.nn.MSELoss() # Mean squared error
+optimizer = torch.optim.Adam(net.parameters(),lr = LEARNING_RATE)
+
+
+for epoch in range(EPOCHS):
+    optimizer.zero_grad() # to make the gradients zero
+    
+    # Loss based on boundary conditions
+    pt_t_bc = Variable(torch.from_numpy(t_bc).float(), requires_grad=False).to(device)
+    pt_x_bc = Variable(torch.from_numpy(x_bc).float(), requires_grad=False).to(device)
+    
+    net_bc_out = net(pt_t_bc) # output of u(x,t)
+    mse_d = criterion(input = net_bc_out, target = pt_x_bc)
+
+    #Physics Loss based on ODE
+    t_collocation = np.random.uniform(low=0.0, high=TRAIN_LIM, size=(col_points,1))
+    all_zeros = np.zeros((col_points,1))
+    
+    
+    pt_t_collocation = Variable(torch.from_numpy(t_collocation).float(), requires_grad=True).to(device)
+    pt_all_zeros = Variable(torch.from_numpy(all_zeros).float(), requires_grad=False).to(device)
+    
+    ode1,ode2 = f(pt_t_collocation,MU,net) # output of f(x,t)
+    
+    mse_f = criterion(input = ode1, target = pt_all_zeros)+criterion(input = ode2, target = pt_all_zeros)
+    
+    loss = mse_d+1*mse_f
+        
+    loss.backward() 
+    optimizer.step() 
+
+    with torch.autograd.no_grad():
+        if epoch%10 == 0:
+            print('Epoch:',epoch,"Total Loss:",loss.data,'ODE Loss',mse_f.data,'Data Loss:',mse_d.data)
+        
+
+## Plot of solution within trained bounds
+score = net(pt_t_bc) 
+
+x1_plot = score[:,0].cpu().detach().numpy()
+x2_plot = score[:,1].cpu().detach().numpy()
+
+plt.figure()
+plt.title('Net X1')
+plt.plot(VanDerPolmu2[:,0],x1_plot)
+plt.figure()
+plt.title('Net X2')
+plt.plot(VanDerPolmu2[:,0],x2_plot)
+
+plt.figure()
+plt.title('X1')
+plt.plot(VanDerPolmu2[:,0],VanDerPolmu2[:,1],label = 'Numerical')
+plt.plot(VanDerPolmu2[:,0],x1_plot,label = 'Net')
+plt.legend()
+plt.figure()
+plt.title('X2')
+plt.plot(VanDerPolmu2[:,0],VanDerPolmu2[:,2],label = 'Numerical')
+plt.plot(VanDerPolmu2[:,0],x2_plot,label = 'Net')
+plt.legend()
+
+# plt.figure()
+# plt.title('X1')
+# plt.plot(VanDerPolmu15[:,0],VanDerPolmu15[:,1])
+# plt.figure()
+# plt.title('X2')
+# plt.plot(VanDerPolmu15[:,0],VanDerPolmu15[:,2])
+
+
