@@ -28,6 +28,9 @@ import numpy as np
 #            X = torch.Tensor(X)
 #            return self(X).detach().numpy().squeeze()
 
+
+
+
 NN=50
 class Net(nn.Module):
     def __init__(self):

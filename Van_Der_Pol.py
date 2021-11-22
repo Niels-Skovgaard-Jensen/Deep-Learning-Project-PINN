@@ -9,6 +9,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+## Load numerical solution
+import scipy.io
+mat = scipy.io.loadmat('Van_der_pol_mu2.mat')
+VanDerPolmu2 = mat['data2']
+
+
+mat = scipy.io.loadmat('Van_der_pol_mu15.mat')
+VanDerPolmu15 = mat['data']
+
+
+
+
+
+
 NN=10
 class Net(nn.Module):
     def __init__(self):
@@ -33,14 +47,18 @@ def init_weights(m):
         torch.nn.init.xavier_uniform_(m.weight)
 
 LEARNING_RATE = 1e-3
-MU = 1; # For Van der Pol equation
-TRAIN_LIM = 1*MU
-COL_RES = 10000
-EPOCHS = 30
+MU = 2; # For Van der Pol equation
+TRAIN_LIM = 50
+COL_RES = 100
+EPOCHS = 300
 
 #Boundary Conditions
-t_bc = np.array([[0]])
-x_bc = np.array([[2,0]])
+# t_bc = np.array([[0]])
+# x_bc = np.array([[2,0]])
+
+t_bc = VanDerPolmu2[:,0]
+t_bc = t_bc[..., None] 
+x_bc = VanDerPolmu2[:,0:2]
 
 # Points and weight boundary vs ODE Loss
 col_points = int(TRAIN_LIM*COL_RES)
@@ -94,6 +112,11 @@ for epoch in range(EPOCHS):
     
     net_bc_out = net(pt_t_bc) # output of u(x,t)
     mse_u = criterion(input = net_bc_out, target = pt_x_bc)
+
+
+
+
+
 
     # Loss based on PDE
     t_collocation = np.random.uniform(low=0.0, high=TRAIN_LIM, size=(col_points,1))
@@ -169,5 +192,19 @@ plt.title('Residual plots of ODE2')
 plt.scatter(T_plot,ode2_residual)
 
 
+
+plt.figure()
+plt.title('X1')
+plt.plot(VanDerPolmu2[:,0],VanDerPolmu2[:,1])
+plt.figure()
+plt.title('X2')
+plt.plot(VanDerPolmu2[:,0],VanDerPolmu2[:,2])
+
+plt.figure()
+plt.title('X1')
+plt.plot(VanDerPolmu15[:,0],VanDerPolmu15[:,1])
+plt.figure()
+plt.title('X2')
+plt.plot(VanDerPolmu15[:,0],VanDerPolmu15[:,2])
 
 
