@@ -44,16 +44,16 @@ def init_weights(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform_(m.weight)
 
-LEARNING_RATE = 5e-4
+LEARNING_RATE = 5e-3
 EPOCHS = 1000
 MU = 2
 TRAIN_LIM = 50
-col_points = 1000
+col_points = 3000
 
 #Boundary Conditions
 # t_bc = np.array([[0]])
 # x_bc = np.array([[2,0]])
-data = VanDerPolmu15 ##TO CHOOSE DATA FOR
+data = VanDerPolmu2 ##TO CHOOSE DATA FOR
 
 t_bc = data[:,0]
 t_bc = t_bc[..., None] 
@@ -86,6 +86,9 @@ net.apply(init_weights)
 criterion = torch.nn.MSELoss() # Mean squared error
 optimizer = torch.optim.Adam(net.parameters(),lr = LEARNING_RATE)
 
+mse_d_list = []
+mse_f_list = []
+loss_list = []
 
 for epoch in range(EPOCHS):
     optimizer.zero_grad() # to make the gradients zero
@@ -109,8 +112,11 @@ for epoch in range(EPOCHS):
     
     mse_f = criterion(input = ode1, target = pt_all_zeros)+criterion(input = ode2, target = pt_all_zeros)
     
-    loss = mse_d+1*mse_f
-        
+    loss = mse_d+0*mse_f
+    
+    mse_d_list.append(mse_d)
+    mse_f_list.append(mse_d)
+    loss_list.append(loss)
     loss.backward() 
     optimizer.step() 
 
@@ -130,6 +136,8 @@ x2_plot = score[:,1].cpu().detach().numpy()
 t_bc_plot = t_bc
 x1_bc = x_bc[:,0]
 x2_bc = x_bc[:,1]
+
+
 
 plt.figure()
 plt.title('Net X1')
@@ -152,8 +160,16 @@ plt.plot(t_plot,x2_plot,label = 'Net')
 plt.scatter(t_bc,x2_bc,marker = 'X',c='k')
 plt.legend()
 
+plt.figure()
 
+mse_d_list_plot = [x.item() for x in mse_d_list]
+mse_f_list_plot = [x.item() for x in mse_f_list]
+loss_plot = [x.item() for x in loss_list]
 
+plt.plot(mse_d_list_plot,label = 'Boundary Loss')
+plt.plot(mse_f_list_plot,label  = 'Physics loss')
+plt.plot(loss_plot,label = 'Total Loss')
+plt.legend()
 
 # plt.figure()
 # plt.title('X1')
