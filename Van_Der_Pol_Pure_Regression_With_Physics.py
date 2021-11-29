@@ -45,7 +45,7 @@ def init_weights(m):
         torch.nn.init.xavier_uniform_(m.weight)
 
 LEARNING_RATE = 5e-4
-EPOCHS = 3000
+EPOCHS = 1000
 MU = 2
 TRAIN_LIM = 50
 col_points = 1000
@@ -61,7 +61,7 @@ x_bc = data[:,1:3]
 
 #DataPoints
 
-point_count = 100;
+point_count = 100
 boundary_points = np.random.randint(0,t_bc.size, size=point_count)
 t_bc = t_bc[boundary_points, :]
 x_bc = x_bc[boundary_points,:]
@@ -120,31 +120,40 @@ for epoch in range(EPOCHS):
         
 
 ## Plot of solution within trained bounds
-score = net(pt_t_bc) 
+
+t_plot = torch.linspace(data[0,0],data[-1,0],steps = 1000)
+t_plot = t_plot[..., None] 
+score = net(t_plot) 
 
 x1_plot = score[:,0].cpu().detach().numpy()
 x2_plot = score[:,1].cpu().detach().numpy()
-t_bc_plot = t_bc.cpu().detach().numpy()
-x1_bc_plot = x_bc[:,0].cpu().detach().numpy()
-x2_bc_plot = x_bc[:,0].cpu().detach().numpy()
+t_bc_plot = t_bc
+x1_bc = x_bc[:,0]
+x2_bc = x_bc[:,1]
 
 plt.figure()
 plt.title('Net X1')
-plt.plot(data[:,0],x1_plot)
+plt.plot(t_plot,x1_plot)
 plt.figure()
 plt.title('Net X2')
-plt.plot(data[:,0],x2_plot)
+plt.plot(t_plot,x2_plot)
 
 plt.figure()
 plt.title('X1')
 plt.plot(data[:,0],data[:,1],label = 'Numerical')
-plt.plot(data[:,0],x1_plot,label = 'Net')
+plt.plot(t_plot,x1_plot,label = 'Net')
+plt.scatter(t_bc,x1_bc)
 plt.legend()
+
 plt.figure()
 plt.title('X2')
 plt.plot(data[:,0],data[:,2],label = 'Numerical')
-plt.plot(data[:,0],x2_plot,label = 'Net')
+plt.plot(t_plot,x2_plot,label = 'Net')
+plt.scatter(t_bc,x2_bc,marker = 'X',c='k')
 plt.legend()
+
+
+
 
 # plt.figure()
 # plt.title('X1')
