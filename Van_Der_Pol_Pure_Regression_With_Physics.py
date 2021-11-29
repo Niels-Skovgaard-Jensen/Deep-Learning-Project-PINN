@@ -45,7 +45,7 @@ def init_weights(m):
         torch.nn.init.xavier_uniform_(m.weight)
 
 LEARNING_RATE = 5e-4
-EPOCHS = 500
+EPOCHS = 3000
 MU = 2
 TRAIN_LIM = 50
 col_points = 1000
@@ -53,11 +53,18 @@ col_points = 1000
 #Boundary Conditions
 # t_bc = np.array([[0]])
 # x_bc = np.array([[2,0]])
+data = VanDerPolmu15 ##TO CHOOSE DATA FOR
 
-t_bc = VanDerPolmu2[:,0]
+t_bc = data[:,0]
 t_bc = t_bc[..., None] 
-x_bc = VanDerPolmu2[:,1:3]
+x_bc = data[:,1:3]
 
+#DataPoints
+
+point_count = 100;
+boundary_points = np.random.randint(0,t_bc.size, size=point_count)
+t_bc = t_bc[boundary_points, :]
+x_bc = x_bc[boundary_points,:]
 
 def f(t,mu,net):
     x = net(t) 
@@ -117,23 +124,26 @@ score = net(pt_t_bc)
 
 x1_plot = score[:,0].cpu().detach().numpy()
 x2_plot = score[:,1].cpu().detach().numpy()
+t_bc_plot = t_bc.cpu().detach().numpy()
+x1_bc_plot = x_bc[:,0].cpu().detach().numpy()
+x2_bc_plot = x_bc[:,0].cpu().detach().numpy()
 
 plt.figure()
 plt.title('Net X1')
-plt.plot(VanDerPolmu2[:,0],x1_plot)
+plt.plot(data[:,0],x1_plot)
 plt.figure()
 plt.title('Net X2')
-plt.plot(VanDerPolmu2[:,0],x2_plot)
+plt.plot(data[:,0],x2_plot)
 
 plt.figure()
 plt.title('X1')
-plt.plot(VanDerPolmu2[:,0],VanDerPolmu2[:,1],label = 'Numerical')
-plt.plot(VanDerPolmu2[:,0],x1_plot,label = 'Net')
+plt.plot(data[:,0],data[:,1],label = 'Numerical')
+plt.plot(data[:,0],x1_plot,label = 'Net')
 plt.legend()
 plt.figure()
 plt.title('X2')
-plt.plot(VanDerPolmu2[:,0],VanDerPolmu2[:,2],label = 'Numerical')
-plt.plot(VanDerPolmu2[:,0],x2_plot,label = 'Net')
+plt.plot(data[:,0],data[:,2],label = 'Numerical')
+plt.plot(data[:,0],x2_plot,label = 'Net')
 plt.legend()
 
 # plt.figure()
