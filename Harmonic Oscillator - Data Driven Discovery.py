@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
 """
+Created on Tue Dec 14 12:48:51 2021
+
+@author: Niels
+"""
+# -*- coding: utf-8 -*-
+"""
 Created on Tue Dec 14 09:44:17 2021
 
 @author: Niels
@@ -48,8 +54,8 @@ class Net(nn.Module):
                                         nn.Tanh(),
                                         nn.Linear(NN, 1))
         
-        self.lambda1 = torch.nn.parameter.Parameter(torch.from_numpy(np.array([0])).float())
-
+        self.m = torch.nn.parameter.Parameter(torch.from_numpy(np.array([1])).float())
+        self.k = torch.nn.parameter.Parameter(torch.from_numpy(np.array([1])).float())
         
         
         
@@ -59,7 +65,7 @@ class Net(nn.Module):
 
     def getODEParam(self):
         
-        return self.lambda1
+        return (self.m,self.k)
 
 def init_weights(m):
     if isinstance(m, nn.Linear):
@@ -74,10 +80,10 @@ WEIGHT_DECAY = 0
 BETA = 1e6
 MU = -1;
 BETA_LIM = BETA
-TRAIN_LIM = 2*np.pi
+TRAIN_LIM = 4*np.pi
 COL_RES = 1000
 EPOCHS = 1500
-n = 200
+n = 30
 
 #Boundary Conditions
 t_bc = np.array([[0]])
@@ -87,13 +93,14 @@ x_bc = np.array([[1]])
 col_points = int(TRAIN_LIM*COL_RES)
 boundary_points = len(x_bc)
 
-F_WEIGHT = 1 #Physics Weight
+F_WEIGHT = 5 #Physics Weight
 B_WEIGHT = 1/(1*boundary_points) #Boundary Weight
 
 # Generate Data for parameter estimation
-lambda_known=0.20
+m_known = 1
+k_known = 5
 t_data = np.linspace(0,TRAIN_LIM,n)
-y_data = np.exp(lambda_known*t_data)
+y_data = np.cos(t_data*np.sqrt(k_known)/np.sqrt(m_known))
 t_data = t_data.reshape(n,1)
 t_data = Variable(torch.from_numpy(t_data).float(), requires_grad=True).to(device)
 y_data = Variable(torch.from_numpy(y_data).float(), requires_grad=True).to(device)
@@ -111,11 +118,11 @@ optimizer = torch.optim.Adam(net.parameters(),lr = LEARNING_RATE)
 ## PDE as loss function
 def f(t,mu,net):
     x = net(t)
-    lambda1  = net.getODEParam()
+    m,k  = net.getODEParam()
     x_t = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
     x_tt = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
-    # Test Equation
-    ode = lambda1*x-x_t
+    # Simlpe Harmonic Oscillator
+    ode = m*x_tt+k*x
     return ode
 
 def lossCalc(mse_u,mse_f,bp,cp,f_weight,b_weight,epoch = -1,beta = 1,betaLim = 1):
@@ -169,7 +176,7 @@ for epoch in range(EPOCHS):
         
 
 
-print(net.lambda1)
+print('Net Parameters:  k:',net.k,'m:',net.m)
 
 
 import matplotlib.pyplot as plt
