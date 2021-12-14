@@ -54,7 +54,7 @@ class Net(nn.Module):
                                         nn.Tanh(),
                                         nn.Linear(NN, 1))
         
-        self.m = torch.nn.parameter.Parameter(torch.from_numpy(np.array([1])).float())
+
         self.k = torch.nn.parameter.Parameter(torch.from_numpy(np.array([1])).float())
         
         
@@ -65,7 +65,7 @@ class Net(nn.Module):
 
     def getODEParam(self):
         
-        return (self.m,self.k)
+        return (self.k)
 
 def init_weights(m):
     if isinstance(m, nn.Linear):
@@ -75,7 +75,7 @@ def init_weights(m):
 
 
 ## Hyperparameters
-LEARNING_RATE = 5e-2
+LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 0
 BETA = 1e6
 MU = -1;
@@ -85,26 +85,31 @@ COL_RES = 1000
 EPOCHS = 1500
 n = 30
 
+
+# Generate Data for parameter estimation
+m_known = 1
+k_known = 2
+t_data = np.linspace(0,TRAIN_LIM,n)
+y_data = np.cos(t_data*np.sqrt(k_known)) # Exact solution for (0,1) boundary condition
+
+#y_data = -k*np.cos()+k
+
+t_data = t_data.reshape(n,1)
+t_data = Variable(torch.from_numpy(t_data).float(), requires_grad=True).to(device)
+y_data = Variable(torch.from_numpy(y_data).float(), requires_grad=True).to(device)
+y_data = y_data.reshape(n,1)
 #Boundary Conditions
 t_bc = np.array([[0]])
 x_bc = np.array([[1]])
 
 # Points and boundary vs ODE weight
 col_points = int(TRAIN_LIM*COL_RES)
-boundary_points = len(x_bc)
+boundary_points = len(x_bc)+len(y_data)
 
-F_WEIGHT = 5 #Physics Weight
-B_WEIGHT = 1/(1*boundary_points) #Boundary Weight
+F_WEIGHT = 1 #Physics Weight
+B_WEIGHT = 1 #Boundary Weight
 
-# Generate Data for parameter estimation
-m_known = 1
-k_known = 5
-t_data = np.linspace(0,TRAIN_LIM,n)
-y_data = np.cos(t_data*np.sqrt(k_known)/np.sqrt(m_known))
-t_data = t_data.reshape(n,1)
-t_data = Variable(torch.from_numpy(t_data).float(), requires_grad=True).to(device)
-y_data = Variable(torch.from_numpy(y_data).float(), requires_grad=True).to(device)
-y_data = y_data.reshape(n,1)
+
 
 # Create net, assign to device and use initialisation
 net = Net()
@@ -118,11 +123,11 @@ optimizer = torch.optim.Adam(net.parameters(),lr = LEARNING_RATE)
 ## PDE as loss function
 def f(t,mu,net):
     x = net(t)
-    m,k  = net.getODEParam()
+    k  = net.getODEParam()
     x_t = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
     x_tt = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
     # Simlpe Harmonic Oscillator
-    ode = m*x_tt+k*x
+    ode = x_tt+k*x
     return ode
 
 def lossCalc(mse_u,mse_f,bp,cp,f_weight,b_weight,epoch = -1,beta = 1,betaLim = 1):
@@ -171,12 +176,13 @@ for epoch in range(EPOCHS):
     #Display loss during training
     with torch.autograd.no_grad():
         if epoch%100== 0:
+            print('Net Parameters:  k:',net.k.detach().numpy())
             print('Epoch:',epoch,"Traning Loss:",loss.data,'epochBeta:',epochBeta)
             print('Boundary Loss:',mse_u/boundary_points,'ODE Loss: ',mse_f/col_points)
         
 
 
-print('Net Parameters:  k:',net.k,'m:',net.m)
+print('Net Parameters:  k:',net.k.detach().numpy() )
 
 
 import matplotlib.pyplot as plt

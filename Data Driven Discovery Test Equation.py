@@ -69,15 +69,15 @@ def init_weights(m):
 
 
 ## Hyperparameters
-LEARNING_RATE = 5e-2
+LEARNING_RATE = 1e-2
 WEIGHT_DECAY = 0
 BETA = 1e6
 MU = -1;
 BETA_LIM = BETA
 TRAIN_LIM = 2*np.pi
 COL_RES = 1000
-EPOCHS = 1500
-n = 200
+EPOCHS = 3000
+n = 30
 
 #Boundary Conditions
 t_bc = np.array([[0]])
@@ -91,7 +91,7 @@ F_WEIGHT = 1 #Physics Weight
 B_WEIGHT = 1/(1*boundary_points) #Boundary Weight
 
 # Generate Data for parameter estimation
-lambda_known=0.20
+lambda_known=0.8
 t_data = np.linspace(0,TRAIN_LIM,n)
 y_data = np.exp(lambda_known*t_data)
 t_data = t_data.reshape(n,1)
@@ -115,7 +115,7 @@ def f(t,mu,net):
     x_t = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
     x_tt = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
     # Test Equation
-    ode = lambda1*x-x_t
+    ode = (lambda1)*x-x_t
     return ode
 
 def lossCalc(mse_u,mse_f,bp,cp,f_weight,b_weight,epoch = -1,beta = 1,betaLim = 1):
@@ -164,6 +164,7 @@ for epoch in range(EPOCHS):
     #Display loss during training
     with torch.autograd.no_grad():
         if epoch%100== 0:
+            print('Net Parameters:  lambda:',net.lambda1.detach().numpy())
             print('Epoch:',epoch,"Traning Loss:",loss.data,'epochBeta:',epochBeta)
             print('Boundary Loss:',mse_u/boundary_points,'ODE Loss: ',mse_f/col_points)
         
