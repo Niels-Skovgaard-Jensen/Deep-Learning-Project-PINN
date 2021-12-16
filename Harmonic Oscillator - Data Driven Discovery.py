@@ -40,7 +40,7 @@ import numpy as np
 #            X = torch.Tensor(X)
 #            return self(X).detach().numpy().squeeze()
 
-NN=10
+NN=40
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
@@ -56,7 +56,7 @@ class Net(nn.Module):
         
 
         self.k = torch.nn.parameter.Parameter(torch.from_numpy(np.array([1])).float())
-        
+        self.m = torch.nn.parameter.Parameter(torch.from_numpy(np.array([1])).float())
         
         
     def forward(self, x):
@@ -65,7 +65,7 @@ class Net(nn.Module):
 
     def getODEParam(self):
         
-        return (self.k)
+        return (self.m,self.k)
 
 def init_weights(m):
     if isinstance(m, nn.Linear):
@@ -82,7 +82,7 @@ MU = -1;
 BETA_LIM = BETA
 TRAIN_LIM = 4*np.pi
 COL_RES = 1000
-EPOCHS = 1500
+EPOCHS = 10000
 n = 30
 
 
@@ -123,11 +123,11 @@ optimizer = torch.optim.Adam(net.parameters(),lr = LEARNING_RATE)
 ## PDE as loss function
 def f(t,mu,net):
     x = net(t)
-    k  = net.getODEParam()
+    m,k  = net.getODEParam()
     x_t = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
-    x_tt = torch.autograd.grad(x.sum(), t, create_graph=True)[0]
+    x_tt = torch.autograd.grad(x_t.sum(), t, create_graph=True)[0]
     # Simlpe Harmonic Oscillator
-    ode = x_tt+k*x
+    ode = m*x_tt+k*x
     return ode
 
 def lossCalc(mse_u,mse_f,bp,cp,f_weight,b_weight,epoch = -1,beta = 1,betaLim = 1):
@@ -168,7 +168,7 @@ for epoch in range(EPOCHS):
     mse_f = criterion(input = ode, target = pt_all_zeros) #ODE Loss
     
     # Combining the loss functions
-    loss,epochBeta = lossCalc(mse_u,mse_f,boundary_points,col_points,F_WEIGHT,B_WEIGHT)
+    loss = mse_u+100*mse_f
     #Gradients
     loss.backward() 
     #Step Optimizer
@@ -176,9 +176,9 @@ for epoch in range(EPOCHS):
     #Display loss during training
     with torch.autograd.no_grad():
         if epoch%100== 0:
-            print('Net Parameters:  k:',net.k.detach().numpy())
-            print('Epoch:',epoch,"Traning Loss:",loss.data,'epochBeta:',epochBeta)
-            print('Boundary Loss:',mse_u/boundary_points,'ODE Loss: ',mse_f/col_points)
+            print('Net Parameters:  k:',net.k.detach().numpy(),'m:',net.m.detach().numpy())
+            print('Epoch:',epoch,"Traning Loss:",loss.data)
+            print('Boundary Loss:',mse_u,'ODE Loss: ',100*mse_f)
         
 
 
